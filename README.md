@@ -1,19 +1,22 @@
-## 博文地址
+## 基于YOLOV5的目标检测系统
+>2023年智能制造系统课设作业
 
-<https://xugaoxiang.com/2021/06/30/yolov5-pyqt5>
+## 代码执行前准备
 
-## 代码执行
+1、项目中使用YOLOv5的`V5.0`版本，注意下载对应权重文件时需要选择[5.0版本](https://github.com/ultralytics/yolov5/releases/v5.0)
 
-项目中使用`YOLOv5`的v5.0版本，界面文件是`project.ui`
+2、界面文件是`project.ui`,可使用QTDesigner打开修改
 
+3、环境依赖
 ```
 pip install -r requirements.txt
 python main.py
 ```
 
-启动界面
 
-![yolov5 pyqt5](data/screenshot_app.png)
+## 代码执行
+启动界面
+![boot.png](boot.png)
 
 图片检测
 
@@ -30,7 +33,3 @@ python main.py
 图片处理后，预测结果保存在`prediction.jpg`
 
 视频或者摄像头处理后，预测结果保存在`prediction.avi`
-
-## exe打包
-
-参考我的博文 <https://xugaoxiang.com/2021/10/13/yolov5-to-exe/>
