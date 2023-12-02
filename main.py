@@ -1,30 +1,29 @@
 # -*- coding: utf-8 -*-
 
+import argparse
+import random
 # Form implementation generated from reading ui file '.\project.ui'
 #
 # Created by: PyQt5 UI code generator 5.9.2
 #
 # WARNING! All changes made in this file will be lost!
 import sys
-import cv2
-import argparse
-import random
-import torch
-import numpy as np
-import torch.backends.cudnn as cudnn
-
-from PyQt5 import QtCore, QtGui, QtWidgets
-from torch._jit_internal import ignore
-
-from utils.torch_utils import select_device
-from models.experimental import attempt_load
-from utils.general import check_img_size, non_max_suppression, scale_coords
-from utils.datasets import letterbox
-from utils.plots import plot_one_box
-
-
 import warnings
+
+import cv2
+import numpy as np
+import torch
+import torch.backends.cudnn as cudnn
+from PyQt5 import QtCore, QtGui, QtWidgets
+
+from models.experimental import attempt_load
+from utils.datasets import letterbox
+from utils.general import check_img_size, non_max_suppression, scale_coords
+from utils.plots import plot_one_box
+from utils.torch_utils import select_device
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 
 class Ui_MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
@@ -35,6 +34,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.init_slots()
         self.cap = cv2.VideoCapture()
         self.out = None
+        self.state = False
         # self.out = cv2.VideoWriter('prediction.avi', cv2.VideoWriter_fourcc(*'XVID'), 20.0, (640, 480))
 
         parser = argparse.ArgumentParser()
@@ -49,7 +49,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
                             default=0.25, help='object confidence threshold')
         parser.add_argument('--iou-thres', type=float,
                             default=0.45, help='IOU threshold for NMS')
-        parser.add_argument('--device', default='',
+        parser.add_argument('--device', default='0',
                             help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
         parser.add_argument(
             '--view-img', action='store_true', help='display results')
@@ -188,6 +188,18 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.horizontalLayout_3.addWidget(self.pushButton_ROI)
         spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.horizontalLayout_3.addItem(spacerItem)
+        self.textBrowser = QtWidgets.QTextBrowser(self.centralwidget)
+        self.textBrowser.setEnabled(True)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.textBrowser.sizePolicy().hasHeightForWidth())
+        self.textBrowser.setSizePolicy(sizePolicy)
+        self.textBrowser.setMaximumSize(QtCore.QSize(16777215, 80))
+        self.textBrowser.setObjectName("textBrowser")
+        self.horizontalLayout_3.addWidget(self.textBrowser)
+        spacerItem1 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        self.horizontalLayout_3.addItem(spacerItem1)
         self.powerLabel = QtWidgets.QLabel(self.centralwidget)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
@@ -213,10 +225,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.horizontalLayout_5.addLayout(self.verticalLayout_2)
         self.horizontalLayout_5.setStretch(0, 7)
         MainWindow.setCentralWidget(self.centralwidget)
-        self.menubar = QtWidgets.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 800, 26))
-        self.menubar.setObjectName("menubar")
-        MainWindow.setMenuBar(self.menubar)
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
@@ -228,17 +236,25 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.pushButton_video.setText(_translate("MainWindow", "视频检测"))
         self.pushButton_camera.setText(_translate("MainWindow", "摄像头检测"))
         self.label.setText(_translate("MainWindow", "TextLabel"))
-        self.pushButton_ROI.setText(_translate("MainWindow", "区域监测"))
+        self.pushButton_ROI.setText(_translate("MainWindow", "区域目标监测"))
         self.powerLabel.setText(_translate("MainWindow", "POWERED BY FB"))
+        self.textBrowser.setHtml(_translate("MainWindow",
+                                            "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+                                            "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
+                                            "p, li { white-space: pre-wrap; }\n"
+                                            "</style></head><body style=\" font-family:\'SimSun\'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
+                                            "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p></body></html>"))
+        self.textBrowser.setText("注意：这是普通模式！")
 
     def init_slots(self):
         self.pushButton_img.clicked.connect(self.button_image_open)
         self.pushButton_video.clicked.connect(self.button_video_open)
         self.pushButton_camera.clicked.connect(self.button_camera_open)
+        self.pushButton_ROI.clicked.connect(self.button_ROI_open)
         self.timer_video.timeout.connect(self.show_video_frame)
 
     def init_logo(self):
-        pix = QtGui.QPixmap('welcome.png')
+        pix = QtGui.QPixmap('img/welcome.png')
         self.label.setScaledContents(True)
         self.label.setPixmap(pix)
 
@@ -247,13 +263,50 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         name_list = []
 
         img_name, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "打开图片", "", "*.jpg;;*.png;;All Files(*)")
+            self, "打开图片", "", "*.png;;*.jpg;;All Files(*)")
         if not img_name:
             return
 
         img = cv2.imread(img_name)
         print(img_name)
         showimg = img
+
+        # 对输入的图片设置mask并对输出图片画出mask区域
+        if self.state:
+            hl1 = 2 / 10  # 监测区域高度距离图片顶部比例
+            wl1 = 2 / 10  # 监测区域高度距离图片左部比例
+            hl2 = 2 / 10  # 监测区域高度距离图片顶部比例
+            wl2 = 8 / 10  # 监测区域高度距离图片左部比例
+            hl3 = 8 / 10  # 监测区域高度距离图片顶部比例
+            wl3 = 8 / 10  # 监测区域高度距离图片左部比例
+            hl4 = 8 / 10  # 监测区域高度距离图片顶部比例
+            wl4 = 2 / 10  # 监测区域高度距离图片左部比例
+
+            # 输入图片设置mask遮挡
+            # mask位置数组
+            pts = np.array([[int(img.shape[1] * wl1), int(img.shape[0] * hl1)],  # pts1
+                            [int(img.shape[1] * wl2), int(img.shape[0] * hl2)],  # pts2
+                            [int(img.shape[1] * wl3), int(img.shape[0] * hl3)],  # pts3
+                            [int(img.shape[1] * wl4), int(img.shape[0] * hl4)]], np.int32)
+            # 2通道全0数组 ---mask
+            mask_black = np.zeros(img.shape[:2], dtype=np.uint8)
+            # mask区域设置
+            mask_roi = cv2.fillPoly(mask_black, [pts], color=(255, 255, 255))
+            # 图片叠加mask
+            img = cv2.add(img, np.zeros(np.shape(img), dtype=np.uint8), mask=mask_roi)
+
+            # 对输出结果绘制mask区域
+            cv2.putText(showimg, "ROI", (int(showimg.shape[1] * wl1 - 5), int(showimg.shape[0] * hl1 - 5)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        1.0, (255, 255, 0), 2, cv2.LINE_AA)
+            # 填充mask设置
+            # 3通道全0数组
+            zeros = np.zeros(showimg.shape, dtype=np.uint8)
+            mask = cv2.fillPoly(zeros, [pts], color=(0, 165, 255))
+            showimg = cv2.addWeighted(showimg, 1, mask, 0.2, 0)
+            # 绘制mask边界
+            cv2.polylines(showimg, [pts], True, (255, 255, 0), 3)
+
         with torch.no_grad():
             img = letterbox(img, new_shape=self.opt.img_size)[0]
             # Convert
@@ -302,7 +355,8 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         flag = self.cap.open(video_name)
         if flag == False:
             QtWidgets.QMessageBox.warning(
-                self, u"Warning", u"打开视频失败", buttons=QtWidgets.QMessageBox.Ok, defaultButton=QtWidgets.QMessageBox.Ok)
+                self, u"Warning", u"打开视频失败", buttons=QtWidgets.QMessageBox.Ok,
+                defaultButton=QtWidgets.QMessageBox.Ok)
         else:
             self.out = cv2.VideoWriter('prediction.avi', cv2.VideoWriter_fourcc(
                 *'MJPG'), 20, (int(self.cap.get(3)), int(self.cap.get(4))))
@@ -317,7 +371,8 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             flag = self.cap.open(0)
             if flag == False:
                 QtWidgets.QMessageBox.warning(
-                    self, u"Warning", u"打开摄像头失败", buttons=QtWidgets.QMessageBox.Ok, defaultButton=QtWidgets.QMessageBox.Ok)
+                    self, u"Warning", u"打开摄像头失败", buttons=QtWidgets.QMessageBox.Ok,
+                    defaultButton=QtWidgets.QMessageBox.Ok)
             else:
                 self.out = cv2.VideoWriter('prediction.avi', cv2.VideoWriter_fourcc(
                     *'MJPG'), 20, (int(self.cap.get(3)), int(self.cap.get(4))))
@@ -335,12 +390,60 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             self.pushButton_img.setDisabled(False)
             self.pushButton_camera.setText(u"摄像头检测")
 
+    def button_ROI_open(self):
+        self.state = not self.state
+        print(self.state)
+        if self.state:
+            self.textBrowser.clear()
+            self.textBrowser.setText("注意：这是区域检测模式!\n检测区域占比坐标为:\n1:(2,2)  2:(8,2)\n3:(8,8)  4:(2,8)")
+            self.pushButton_ROI.setText(u"返回普通模式")
+        else:
+            self.textBrowser.clear()
+            self.textBrowser.setText("注意：这是普通模式！")
+            self.pushButton_ROI.setText(u"区域目标监测")
+
+    # 视频流处理函数
     def show_video_frame(self):
         name_list = []
 
         flag, img = self.cap.read()
         if img is not None:
             showimg = img
+            if self.state:
+                hl1 = 0.5 / 10  # 监测区域高度距离图片顶部比例
+                wl1 = 3.5 / 10  # 监测区域高度距离图片左部比例
+                hl2 = 0.5 / 10  # 监测区域高度距离图片顶部比例
+                wl2 = 6.5 / 10  # 监测区域高度距离图片左部比例
+                hl3 = 9.5 / 10  # 监测区域高度距离图片顶部比例
+                wl3 = 6.5 / 10  # 监测区域高度距离图片左部比例
+                hl4 = 9.5 / 10  # 监测区域高度距离图片顶部比例
+                wl4 = 3.5 / 10  # 监测区域高度距离图片左部比例
+
+                # 输入图片设置mask遮挡
+                # mask位置数组
+                pts = np.array([[int(img.shape[1] * wl1), int(img.shape[0] * hl1)],  # pts1
+                                [int(img.shape[1] * wl2), int(img.shape[0] * hl2)],  # pts2
+                                [int(img.shape[1] * wl3), int(img.shape[0] * hl3)],  # pts3
+                                [int(img.shape[1] * wl4), int(img.shape[0] * hl4)]], np.int32)
+                # 2通道全0数组 ---mask
+                mask_black = np.zeros(img.shape[:2], dtype=np.uint8)
+                # mask区域设置
+                mask_roi = cv2.fillPoly(mask_black, [pts], color=(255, 255, 255))
+                # 图片叠加mask
+                img = cv2.add(img, np.zeros(np.shape(img), dtype=np.uint8), mask=mask_roi)
+
+                # 对输出结果绘制mask区域
+                cv2.putText(showimg, "ROI", (int(showimg.shape[1] * wl1 - 5), int(showimg.shape[0] * hl1 - 5)),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            1.0, (255, 255, 0), 2, cv2.LINE_AA)
+                # 填充mask设置
+                # 3通道全0数组
+                zeros = np.zeros(showimg.shape, dtype=np.uint8)
+                mask = cv2.fillPoly(zeros, [pts], color=(0, 165, 255))
+                showimg = cv2.addWeighted(showimg, 1, mask, 0.2, 0)
+                # 绘制mask边界
+                cv2.polylines(showimg, [pts], True, (255, 255, 0), 3)
+
             with torch.no_grad():
                 img = letterbox(img, new_shape=self.opt.img_size)[0]
                 # Convert
